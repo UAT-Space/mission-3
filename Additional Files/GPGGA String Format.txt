@@ -1,0 +1,21 @@
+Standard format of the GPGGA string output by GPS modules
+
+single line - no spaces - comma-sepparated
+
+ 0, $GPGGA,      '$GPGGA'
+ 1, time,        float
+ 2, latitude,    float
+ 3, N/S,         char
+ 4, longitude,   float
+ 5, E/W,         char
+ 6, quality,     float
+ 7, # of Sat's,  float
+ 8, HDOP,        float
+ 9, altitude,    float
+10, alt units,   'M' (meters)
+11, geo sepp,    float
+12, sepp units,  'M' (meters)
+13, blank,       ''
+14, blank,       ''
+15, checksum,    '*' + hex
+16, <CR><LF>     '<CR><LF>'
