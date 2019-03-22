@@ -21,6 +21,9 @@
 #define chipSelect    53      // SD CS
 #define FILE_BASE_NAME "Data"
 
+// Interval between data records in millis
+const uint32_t SAMPLE_INTERVAL_MS = 3000;
+
 // time in micros for next data record/transmit
 uint32_t logTime;
 
@@ -90,6 +93,13 @@ void setup() {
       error(3);
     }
   }
+  if (!file.open(fileName, O_WRONLY | O_CREAT | O_EXCL)) {
+    error(4);
+  }
+
+  // Start on a multiple of the sample interval.
+  logTime = micros()/(1000UL*SAMPLE_INTERVAL_MS) + 1;
+  logTime *= 1000UL*SAMPLE_INTERVAL_MS;
 }
 
 //////////
@@ -97,7 +107,26 @@ void setup() {
 //////////
 
 void loop() {
+  // Time for next record.
+  logTime += 1000UL*SAMPLE_INTERVAL_MS;
 
+  // Wait for log time.
+  int32_t diff;
+  do {
+    diff = micros() - logTime;
+  } while (diff < 0);
+
+  // Check for data rate too high.
+  if (diff > 10) {
+    error("Missed data record");
+  }
+
+  // LOG
+
+  // Force data to SD and update the directory entry to avoid data loss.
+  if (!file.sync() || file.getWriteError()) {
+    error(5);
+  }
 }
 
 //////////////////////////
