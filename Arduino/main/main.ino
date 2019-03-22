@@ -134,6 +134,6 @@ void loop() {
 //////////////////////////
 
 void error(uint8_t c) {
-  printMode.print("ERROR: ");
+  printMode.print(F("ERROR: "));
   printMode.println(c);
 }
