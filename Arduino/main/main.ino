@@ -7,10 +7,10 @@
 #include <Wire.h>
 #include <SdFat.h>            // SD
 #include <Adafruit_GPS.h>     // GPS
-#include <Adafruit_Sensor.h>  // General library required by Adafruit sensors
-#include <Adafruit_CCS811.h>  // Air quality sensor breakout (eC02, TVOC)
-#include <Adafruit_BME680.h>  // Pressure sensor breakout (pressure, temp, humidity, VOC)
-#include <Adafruit_LSM9DS1.h> // Gyro board (gyro, accelerometer, magnetometer)
+#include <Adafruit_Sensor.h>  // Driver library required by Adafruit sensors
+#include <Adafruit_CCS811.h>  // I2C Air quality sensor breakout (eC02, TVOC)
+#include <Adafruit_BME680.h>  // I2C Pressure sensor breakout (pressure, temp, humidity, VOC)
+#include <Adafruit_LSM9DS1.h> // I2C Gyro board (gyro, accelerometer, magnetometer)
 
 #define printMode Serial      // Serial for USB | Serial1 for radio
 #define gpsTX         14      // TX3
@@ -30,13 +30,17 @@ uint32_t logTime;
 // I2C
 Adafruit_LSM9DS1 gyro = Adafruit_LSM9DS1();
 Adafruit_BME680 bme;
+Adafruit_CCS811 ccs;
 
 // SD
 SdFat sd;
 SdFile file;
 
 
-// class feeds one input to two output channels (ex. radio and SD)
+/* Class feeds one input to two output channels (ex. radio and SD).
+   Inherits from Print: instances use instance.print/println/write.
+   In this file we use it for sending the same data to the SD and 
+   radio with one function call. */
 class Tee : public Print {
   public:
     Tee(Print &_p1, Print &_p2) : p1(_p1), p2(_p2) {}
@@ -51,6 +55,7 @@ class Tee : public Print {
 };
 
 
+// printer.print(data) -> SD and radio output
 Tee printer(printMode, file);
 
 /////////////////////////
@@ -64,11 +69,9 @@ void error(uint8_t c);
 ///////////
 
 void setup() {
-  if (printMode == Serial) {
-    Serial.begin(9600);
-    while (!Serial) SysCall::yield();
-    delay(1000);  // necessary?
-  }
+  // start either Serial or Serial1
+  printMode.begin(9600);
+  while (!printMode) SysCall::yield();
 
   // try speed lower than 50 if SPI errors occur
   if (!sd.begin(chipSelect, SD_SCK_MHZ(50))) {
