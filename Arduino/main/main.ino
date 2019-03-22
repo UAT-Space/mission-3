@@ -118,14 +118,14 @@ void loop() {
 
   // Check for data rate too high.
   if (diff > 10) {
-    error("Missed data record");
+    error(5);
   }
 
   // LOG
 
   // Force data to SD and update the directory entry to avoid data loss.
   if (!file.sync() || file.getWriteError()) {
-    error(5);
+    error(6);
   }
 }
 
