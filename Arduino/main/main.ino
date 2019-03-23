@@ -13,13 +13,15 @@
 #include <Adafruit_LSM9DS1.h> // I2C Gyro board (gyro, accelerometer, magnetometer)
 
 #define printMode Serial      // Serial for USB | Serial1 for radio
-#define gpsTX         14      // TX3
-#define gpsRX         15      // RX3
-#define radioTX       18      // TX1
-#define radioRX       19      // RX1
-#define tempPin       40      // Digital temp sensor
-#define chipSelect    53      // SD CS
+#define gpsSerial Serial3     // GPS Serial line
+#define gpsTX          14     // TX3
+#define gpsRX          15     // RX3
+#define radioTX        18     // TX1
+#define radioRX        19     // RX1
+#define tempPin        40     // Digital temp sensor
+#define chipSelect     53     // SD CS
 #define FILE_BASE_NAME "Data"
+#define SEALEVELPRESSURE_HPA (1013.25)  // needs to be updated for launch day
 
 // Interval between data records in millis
 const uint32_t SAMPLE_INTERVAL_MS = 3000;
@@ -27,8 +29,11 @@ const uint32_t SAMPLE_INTERVAL_MS = 3000;
 // time in micros for next data record/transmit
 uint32_t logTime;
 
-// I2C
-Adafruit_LSM9DS1 gyro = Adafruit_LSM9DS1();
+// GPS
+Adafruit_GPS gps(&gpsSerial);
+
+// I2C Sensors
+Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
 Adafruit_BME680 bme;
 Adafruit_CCS811 ccs;
 
@@ -39,7 +44,7 @@ SdFile file;
 
 /* Class feeds one input to two output channels (ex. radio and SD).
    Inherits from Print: instances use instance.print/println/write.
-   In this file we use it for sending the same data to the SD and 
+   In this file we use it for sending the same data to the SD and
    radio with one function call. */
 class Tee : public Print {
   public:
@@ -63,6 +68,12 @@ Tee printer(printMode, file);
 /////////////////////////
 
 void error(uint8_t c);
+void startBME();
+void startCCS();
+void startGPS();
+void startLSM();
+void startSD();
+void startComponents();
 
 ///////////
 // SETUP //
@@ -71,8 +82,120 @@ void error(uint8_t c);
 void setup() {
   // start either Serial or Serial1
   printMode.begin(9600);
-  while (!printMode) SysCall::yield();
+  while (!printMode) {
+    SysCall::yield();
+  }
 
+  // start BME/CCS/GPS/GYRO/SD
+  startComponents();
+
+  // start on a multiple of the sample interval.
+  logTime = micros() / (1000UL * SAMPLE_INTERVAL_MS) + 1;
+  logTime *= 1000UL * SAMPLE_INTERVAL_MS;
+}
+
+//////////
+// LOOP //
+//////////
+
+void loop() {
+  // time for next record.
+  logTime += 1000UL * SAMPLE_INTERVAL_MS;
+
+  // wait for log time.
+  int32_t diff;
+  do {
+    diff = micros() - logTime;
+  } while (diff < 0);
+
+  // check for data rate too high.
+  if (diff > 10) {
+    error(5);
+  }
+
+  // parse new GPS string
+  if (gps.newNMEAreceived()) {
+    gps.parse(gps.lastNMEA());
+  }
+
+  // LOG
+
+  // force data to SD and update the directory entry to avoid data loss.
+  if (!file.sync() || file.getWriteError()) {
+    error(6);
+  }
+}
+
+//////////////////////////
+// FUNCTION DEFINITIONS //
+//////////////////////////
+
+/// sends error code (int) over printMode
+void error(uint8_t c) {
+  printMode.print(F("ERROR: "));
+  printMode.println(c);
+}
+
+/// starts the BME680 sensor
+void startBME() {
+  if (!bme.begin()) {
+    error(1);
+  }
+
+  // set up oversampling and filter initialization
+  bme.setTemperatureOversampling(BME680_OS_8X);
+  bme.setHumidityOversampling(BME680_OS_2X);
+  bme.setPressureOversampling(BME680_OS_4X);
+  bme.setIIRFilterSize(BME680_FILTER_SIZE_3);
+  bme.setGasHeater(320, 150); // 320*C for 150 ms
+}
+
+/// starts the CCS811 sensor
+void startCCS(){
+  if (!ccs.begin()) {
+    error(1);
+  }
+  while(!ccs.available()) {
+    SysCall::yield();
+  }
+  
+  //calibrate temperature sensor
+  float temp = ccs.calculateTemperature();
+  ccs.setTempOffset(temp - 25.0);
+}
+
+void startGPS() {
+  gps.begin(9600);
+  gps.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+  gps.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
+}
+
+/// starts the LSM9DS1 sensor and sets sensitivities
+void startLSM() {
+  if (!lsm.begin()) {
+    error(1);
+  }
+  
+  // 1.) Set the accelerometer range
+  lsm.setupAccel(lsm.LSM9DS1_ACCELRANGE_2G);
+  //lsm.setupAccel(lsm.LSM9DS1_ACCELRANGE_4G);
+  //lsm.setupAccel(lsm.LSM9DS1_ACCELRANGE_8G);
+  //lsm.setupAccel(lsm.LSM9DS1_ACCELRANGE_16G);
+  
+  // 2.) Set the magnetometer sensitivity
+  lsm.setupMag(lsm.LSM9DS1_MAGGAIN_4GAUSS);
+  //lsm.setupMag(lsm.LSM9DS1_MAGGAIN_8GAUSS);
+  //lsm.setupMag(lsm.LSM9DS1_MAGGAIN_12GAUSS);
+  //lsm.setupMag(lsm.LSM9DS1_MAGGAIN_16GAUSS);
+
+  // 3.) Setup the gyroscope
+  lsm.setupGyro(lsm.LSM9DS1_GYROSCALE_245DPS);
+  //lsm.setupGyro(lsm.LSM9DS1_GYROSCALE_500DPS);
+  //lsm.setupGyro(lsm.LSM9DS1_GYROSCALE_2000DPS);
+}
+
+/// starts the SD card and creates a new file to avoid overwriting
+void startSD() {
   // try speed lower than 50 if SPI errors occur
   if (!sd.begin(chipSelect, SD_SCK_MHZ(50))) {
     error(1);
@@ -99,44 +222,12 @@ void setup() {
   if (!file.open(fileName, O_WRONLY | O_CREAT | O_EXCL)) {
     error(4);
   }
-
-  // Start on a multiple of the sample interval.
-  logTime = micros()/(1000UL*SAMPLE_INTERVAL_MS) + 1;
-  logTime *= 1000UL*SAMPLE_INTERVAL_MS;
 }
 
-//////////
-// LOOP //
-//////////
-
-void loop() {
-  // Time for next record.
-  logTime += 1000UL*SAMPLE_INTERVAL_MS;
-
-  // Wait for log time.
-  int32_t diff;
-  do {
-    diff = micros() - logTime;
-  } while (diff < 0);
-
-  // Check for data rate too high.
-  if (diff > 10) {
-    error(5);
-  }
-
-  // LOG
-
-  // Force data to SD and update the directory entry to avoid data loss.
-  if (!file.sync() || file.getWriteError()) {
-    error(6);
-  }
-}
-
-//////////////////////////
-// FUNCTION DEFINITIONS //
-//////////////////////////
-
-void error(uint8_t c) {
-  printMode.print(F("ERROR: "));
-  printMode.println(c);
+void startComponents() {
+  startBME();
+  startCCS();
+  startGPS();
+  startLSM();
+  startSD();
 }
