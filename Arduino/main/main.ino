@@ -21,9 +21,9 @@
 #define tempPin        40     // Digital temp sensor
 #define chipSelect     53     // SD CS
 #define FILE_BASE_NAME "Data"
-#define SEALEVELPRESSURE_HPA (1013.25)  // needs to be updated for launch day
+#define PRESSURE_HPA (1018.0) // needs to be updated for launch day (sea level hpa)
 
-// Interval between data records in millis
+// interval between data records in millis
 const uint32_t SAMPLE_INTERVAL_MS = 3000;
 
 // time in micros for next data record/transmit
@@ -68,6 +68,7 @@ Tee printer(printMode, file);
 /////////////////////////
 
 void error(uint8_t c);
+void processData();
 void startBME();
 void startCCS();
 void startGPS();
@@ -113,12 +114,8 @@ void loop() {
     error(5);
   }
 
-  // parse new GPS string
-  if (gps.newNMEAreceived()) {
-    gps.parse(gps.lastNMEA());
-  }
-
   // LOG
+  processData();
 
   // force data to SD and update the directory entry to avoid data loss.
   if (!file.sync() || file.getWriteError()) {
@@ -134,6 +131,61 @@ void loop() {
 void error(uint8_t c) {
   printMode.print(F("ERROR: "));
   printMode.println(c);
+}
+
+/// collects data from sensors, transmits to ground and saves to SD
+void processData() {
+  // perform sensor readings
+  
+  // parse new GPS string
+  if (gps.newNMEAreceived()) {
+    gps.parse(gps.lastNMEA());
+  }
+  
+  // LSM9DS1 gyro
+  sensors_event_t a, m, g, temp;
+  lsm.read();
+  lsm.getEvent(&a, &m, &g, &temp);
+
+  // digital temp sensor
+
+  // BME680
+  if (!bme.performReading()) {
+    error(1);
+  }
+
+  // CCS811
+  float ccsTemp = ccs.calculateTemperature();
+  ccs.readData();
+
+  // report sensor readings (printer -> radio and SD)
+
+  // logTime/1M -> seconds elapsed
+  printer.print(logTime / 1000000);               printer.print(F(","));
+  printer.print(gps.hour);                        printer.print(F(":"));
+  printer.print(gps.minute);                      printer.print(F(":"));
+  printer.print(gps.seconds);                     printer.print(F(","));
+  printer.print(gps.latitudeDegrees, 4);          printer.print(F(","));
+  printer.print(gps.longitudeDegrees, 4);         printer.print(F(","));
+  printer.print(gps.altitude);                    printer.print(F(","));
+  printer.print(bme.pressure / 100.0);            printer.print(F(","));
+  printer.print(bme.humidity);                    printer.print(F(","));
+  printer.print(bme.gas_resistance / 1000.0);     printer.print(F(","));
+  printer.print(bme.readAltitude(PRESSURE_HPA));  printer.print(F(","));
+  printer.print(bme.temperature);                 printer.print(F(","));
+  // digital temp here
+  printer.print(ccsTemp);                         printer.print(F(","));
+  printer.print(ccs.geteCO2());                   printer.print(F(","));
+  printer.print(ccs.getTVOC());                   printer.print(F(","));
+  printer.print(a.acceleration.x);                printer.print(F(","));
+  printer.print(a.acceleration.y);                printer.print(F(","));
+  printer.print(a.acceleration.z);                printer.print(F(","));
+  printer.print(m.magnetic.x);                    printer.print(F(","));
+  printer.print(m.magnetic.y);                    printer.print(F(","));
+  printer.print(m.magnetic.z);                    printer.print(F(","));
+  printer.print(g.gyro.x);                        printer.print(F(","));
+  printer.print(g.gyro.y);                        printer.print(F(","));
+  printer.print(g.gyro.z);
 }
 
 /// starts the BME680 sensor
