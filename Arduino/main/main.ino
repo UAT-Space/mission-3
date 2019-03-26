@@ -36,6 +36,10 @@ Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
 Adafruit_BME680 bme;
 Adafruit_CCS811 ccs;
 
+// Digital Temp
+OneWire oneWire(tempPin);
+DallasTemperature digitalTemp(&oneWire);
+
 // SD
 SdFat sd;
 SdFile file;
@@ -73,6 +77,7 @@ void startCCS();
 void startGPS();
 void startLSM();
 void startSD();
+void startTemp();
 void startComponents();
 
 ///////////
@@ -147,6 +152,7 @@ void processData() {
   lsm.getEvent(&a, &m, &g, &temp);
 
   // digital temp sensor
+  digitalTemp.requestTemperatures();
 
   // BME680
   if (!bme.performReading()) {
@@ -172,7 +178,7 @@ void processData() {
   printer.print(bme.gas_resistance / 1000.0);     printer.print(F(","));
   printer.print(bme.readAltitude(PRESSURE_HPA));  printer.print(F(","));
   printer.print(bme.temperature);                 printer.print(F(","));
-  // digital temp here
+  printer.print(digitalTemp.getTempCByIndex(0));  printer.print(F(","));
   printer.print(ccsTemp);                         printer.print(F(","));
   printer.print(ccs.geteCO2());                   printer.print(F(","));
   printer.print(ccs.getTVOC());                   printer.print(F(","));
@@ -275,10 +281,15 @@ void startSD() {
   }
 }
 
+void startTemp() {
+  digitalTemp.begin();
+}
+
 void startComponents() {
   startBME();
   startCCS();
   startGPS();
   startLSM();
   startSD();
+  startTemp();
 }
