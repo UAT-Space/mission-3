@@ -1,5 +1,3 @@
-
-
 // UAT SPACE M3 FLIGHT COMPUTER MAIN PROGRAM
 // Copyright (c) 2019, UAT Space.
 // Copyrights licensed under the Apache-2.0 License.
@@ -13,16 +11,16 @@
 #include <Adafruit_LSM9DS1.h>   // I2C Gyro board (gyro, accelerometer, magnetometer)
 #include <DallasTemperature.h>  // Digital Temperature Sensor
 
-#define printMode Serial      // Serial for USB | Serial1 for radio
-#define gpsSerial Serial3     // GPS Serial line
-#define gpsTX          14     // TX3
-#define gpsRX          15     // RX3
-#define radioTX        18     // TX1
-#define radioRX        19     // RX1
-#define tempPin        40     // Digital temp sensor
-#define chipSelect     53     // SD CS
+#define printMode Serial        // Serial for USB | Serial1 for radio
+#define gpsSerial Serial3       // GPS Serial line
+#define gpsTX          14       // TX3
+#define gpsRX          15       // RX3
+#define radioTX        18       // TX1
+#define radioRX        19       // RX1
+#define tempPin        40       // Digital temp sensor
+#define chipSelect     53       // SD CS
 #define FILE_BASE_NAME "Data"
-#define PRESSURE_HPA (1018.0) // needs to be updated for launch day (sea level hpa)
+#define PRESSURE_HPA (1018.0)   // needs to be updated for launch day (sea level hpa)
 
 // interval between data records in millis
 const uint32_t SAMPLE_INTERVAL_MS = 3000;
@@ -112,7 +110,7 @@ void loop() {
 
   // check for data rate too high.
   if (diff > 10) {
-    error(5);
+    error(1);
   }
 
   // LOG
@@ -120,7 +118,7 @@ void loop() {
 
   // force data to SD and update the directory entry to avoid data loss.
   if (!file.sync() || file.getWriteError()) {
-    error(6);
+    error(2);
   }
 }
 
@@ -152,7 +150,7 @@ void processData() {
 
   // BME680
   if (!bme.performReading()) {
-    error(1);
+    error(3);
   }
 
   // CCS811
@@ -192,7 +190,7 @@ void processData() {
 /// starts the BME680 sensor
 void startBME() {
   if (!bme.begin()) {
-    error(1);
+    error(4);
   }
 
   // set up oversampling and filter initialization
@@ -206,7 +204,7 @@ void startBME() {
 /// starts the CCS811 sensor
 void startCCS(){
   if (!ccs.begin()) {
-    error(1);
+    error(5);
   }
   while(!ccs.available()) {
     SysCall::yield();
@@ -226,7 +224,7 @@ void startGPS() {
 /// starts the LSM9DS1 sensor and sets sensitivities
 void startLSM() {
   if (!lsm.begin()) {
-    error(1);
+    error(6);
   }
   
   // 1.) Set the accelerometer range
@@ -251,14 +249,14 @@ void startLSM() {
 void startSD() {
   // try speed lower than 50 if SPI errors occur
   if (!sd.begin(chipSelect, SD_SCK_MHZ(50))) {
-    error(1);
+    error(7);
   }
 
   // find unused file name
   const uint8_t BASE_NAME_SIZE = sizeof(FILE_BASE_NAME) - 1;
   char fileName[13] = FILE_BASE_NAME "00.csv";
   if (BASE_NAME_SIZE > 6) {
-    error(2);
+    error(8);
   }
   while (sd.exists(fileName)) {
     if (fileName[BASE_NAME_SIZE + 1] != '9') {
@@ -269,11 +267,11 @@ void startSD() {
       fileName[BASE_NAME_SIZE]++;
     }
     else {
-      error(3);
+      error(9);
     }
   }
   if (!file.open(fileName, O_WRONLY | O_CREAT | O_EXCL)) {
-    error(4);
+    error(10);
   }
 }
 
