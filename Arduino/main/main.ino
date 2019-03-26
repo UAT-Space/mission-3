@@ -3,25 +3,24 @@
 // Copyrights licensed under the Apache-2.0 License.
 // Author : Brandon Nay | branay@uat.edu | linkedin.com/in/brandon-nay/
 
-#include <SPI.h>
-#include <Wire.h>
-#include <SdFat.h>            // SD
-#include <Adafruit_GPS.h>     // GPS
-#include <Adafruit_Sensor.h>  // Driver library required by Adafruit sensors
-#include <Adafruit_CCS811.h>  // I2C Air quality sensor breakout (eC02, TVOC)
-#include <Adafruit_BME680.h>  // I2C Pressure sensor breakout (pressure, temp, humidity, VOC)
-#include <Adafruit_LSM9DS1.h> // I2C Gyro board (gyro, accelerometer, magnetometer)
+#include <SdFat.h>              // SD
+#include <Adafruit_GPS.h>       // GPS
+#include <Adafruit_Sensor.h>    // Driver library required by Adafruit sensors
+#include <Adafruit_CCS811.h>    // I2C Air quality sensor breakout (eC02, TVOC)
+#include <Adafruit_BME680.h>    // I2C Pressure sensor breakout (pressure, temp, humidity, VOC)
+#include <Adafruit_LSM9DS1.h>   // I2C Gyro board (gyro, accelerometer, magnetometer)
+#include <DallasTemperature.h>  // Digital Temperature Sensor
 
-#define printMode Serial      // Serial for USB | Serial1 for radio
-#define gpsSerial Serial3     // GPS Serial line
-#define gpsTX          14     // TX3
-#define gpsRX          15     // RX3
-#define radioTX        18     // TX1
-#define radioRX        19     // RX1
-#define tempPin        40     // Digital temp sensor
-#define chipSelect     53     // SD CS
+#define printMode Serial        // Serial for USB | Serial1 for radio
+#define gpsSerial Serial3       // GPS Serial line
+#define gpsTX          14       // TX3
+#define gpsRX          15       // RX3
+#define radioTX        18       // TX1
+#define radioRX        19       // RX1
+#define tempPin        40       // Digital temp sensor
+#define chipSelect     53       // SD CS
 #define FILE_BASE_NAME "Data"
-#define PRESSURE_HPA (1018.0) // needs to be updated for launch day (sea level hpa)
+#define PRESSURE_HPA (1018.0)   // needs to be updated for launch day (sea level hpa)
 
 // interval between data records in millis
 const uint32_t SAMPLE_INTERVAL_MS = 3000;
@@ -36,6 +35,10 @@ Adafruit_GPS gps(&gpsSerial);
 Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
 Adafruit_BME680 bme;
 Adafruit_CCS811 ccs;
+
+// Digital Temp
+OneWire oneWire(tempPin);
+DallasTemperature digitalTemp(&oneWire);
 
 // SD
 SdFat sd;
@@ -74,6 +77,7 @@ void startCCS();
 void startGPS();
 void startLSM();
 void startSD();
+void startTemp();
 void startComponents();
 
 ///////////
@@ -111,7 +115,7 @@ void loop() {
 
   // check for data rate too high.
   if (diff > 10) {
-    error(5);
+    error(1);
   }
 
   // LOG
@@ -119,7 +123,7 @@ void loop() {
 
   // force data to SD and update the directory entry to avoid data loss.
   if (!file.sync() || file.getWriteError()) {
-    error(6);
+    error(2);
   }
 }
 
@@ -148,10 +152,11 @@ void processData() {
   lsm.getEvent(&a, &m, &g, &temp);
 
   // digital temp sensor
+  digitalTemp.requestTemperatures();
 
   // BME680
   if (!bme.performReading()) {
-    error(1);
+    error(3);
   }
 
   // CCS811
@@ -173,7 +178,7 @@ void processData() {
   printer.print(bme.gas_resistance / 1000.0);     printer.print(F(","));
   printer.print(bme.readAltitude(PRESSURE_HPA));  printer.print(F(","));
   printer.print(bme.temperature);                 printer.print(F(","));
-  // digital temp here
+  printer.print(digitalTemp.getTempCByIndex(0));  printer.print(F(","));
   printer.print(ccsTemp);                         printer.print(F(","));
   printer.print(ccs.geteCO2());                   printer.print(F(","));
   printer.print(ccs.getTVOC());                   printer.print(F(","));
@@ -191,7 +196,7 @@ void processData() {
 /// starts the BME680 sensor
 void startBME() {
   if (!bme.begin()) {
-    error(1);
+    error(4);
   }
 
   // set up oversampling and filter initialization
@@ -205,7 +210,7 @@ void startBME() {
 /// starts the CCS811 sensor
 void startCCS(){
   if (!ccs.begin()) {
-    error(1);
+    error(5);
   }
   while(!ccs.available()) {
     SysCall::yield();
@@ -225,7 +230,7 @@ void startGPS() {
 /// starts the LSM9DS1 sensor and sets sensitivities
 void startLSM() {
   if (!lsm.begin()) {
-    error(1);
+    error(6);
   }
   
   // 1.) Set the accelerometer range
@@ -250,14 +255,14 @@ void startLSM() {
 void startSD() {
   // try speed lower than 50 if SPI errors occur
   if (!sd.begin(chipSelect, SD_SCK_MHZ(50))) {
-    error(1);
+    error(7);
   }
 
   // find unused file name
   const uint8_t BASE_NAME_SIZE = sizeof(FILE_BASE_NAME) - 1;
   char fileName[13] = FILE_BASE_NAME "00.csv";
   if (BASE_NAME_SIZE > 6) {
-    error(2);
+    error(8);
   }
   while (sd.exists(fileName)) {
     if (fileName[BASE_NAME_SIZE + 1] != '9') {
@@ -268,12 +273,16 @@ void startSD() {
       fileName[BASE_NAME_SIZE]++;
     }
     else {
-      error(3);
+      error(9);
     }
   }
   if (!file.open(fileName, O_WRONLY | O_CREAT | O_EXCL)) {
-    error(4);
+    error(10);
   }
+}
+
+void startTemp() {
+  digitalTemp.begin();
 }
 
 void startComponents() {
@@ -282,4 +291,5 @@ void startComponents() {
   startGPS();
   startLSM();
   startSD();
+  startTemp();
 }
