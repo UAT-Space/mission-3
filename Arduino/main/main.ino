@@ -1,16 +1,17 @@
+
+
 // UAT SPACE M3 FLIGHT COMPUTER MAIN PROGRAM
 // Copyright (c) 2019, UAT Space.
 // Copyrights licensed under the Apache-2.0 License.
 // Author : Brandon Nay | branay@uat.edu | linkedin.com/in/brandon-nay/
 
-#include <SPI.h>
-#include <Wire.h>
-#include <SdFat.h>            // SD
-#include <Adafruit_GPS.h>     // GPS
-#include <Adafruit_Sensor.h>  // Driver library required by Adafruit sensors
-#include <Adafruit_CCS811.h>  // I2C Air quality sensor breakout (eC02, TVOC)
-#include <Adafruit_BME680.h>  // I2C Pressure sensor breakout (pressure, temp, humidity, VOC)
-#include <Adafruit_LSM9DS1.h> // I2C Gyro board (gyro, accelerometer, magnetometer)
+#include <SdFat.h>              // SD
+#include <Adafruit_GPS.h>       // GPS
+#include <Adafruit_Sensor.h>    // Driver library required by Adafruit sensors
+#include <Adafruit_CCS811.h>    // I2C Air quality sensor breakout (eC02, TVOC)
+#include <Adafruit_BME680.h>    // I2C Pressure sensor breakout (pressure, temp, humidity, VOC)
+#include <Adafruit_LSM9DS1.h>   // I2C Gyro board (gyro, accelerometer, magnetometer)
+#include <DallasTemperature.h>  // Digital Temperature Sensor
 
 #define printMode Serial      // Serial for USB | Serial1 for radio
 #define gpsSerial Serial3     // GPS Serial line
