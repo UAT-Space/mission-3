@@ -9,6 +9,7 @@
 #include <Adafruit_CCS811.h>    // I2C Air quality sensor breakout (eC02, TVOC)
 #include <Adafruit_BME680.h>    // I2C Pressure sensor breakout (pressure, temp, humidity, VOC)
 #include <Adafruit_LSM9DS1.h>   // I2C Gyro board (gyro, accelerometer, magnetometer)
+#include <Adafruit_AMG88xx.h>   // I2C 8x8 grideye thermal cam
 #include <DallasTemperature.h>  // Digital Temperature Sensor
 
 #define printMode Serial        // Serial for USB | Serial1 for radio
@@ -28,6 +29,9 @@ const uint32_t SAMPLE_INTERVAL_MS = 3000;
 // time in micros for next data record/transmit
 uint32_t logTime;
 
+// AMG88xx pixel buffer
+float pixels[64];
+
 // GPS
 Adafruit_GPS gps(&gpsSerial);
 
@@ -35,6 +39,7 @@ Adafruit_GPS gps(&gpsSerial);
 Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1();
 Adafruit_BME680 bme;
 Adafruit_CCS811 ccs;
+Adafruit_AMG88xx amg;
 
 // Digital Temp
 OneWire oneWire(tempPin);
@@ -145,6 +150,9 @@ void processData() {
   if (gps.newNMEAreceived()) {
     gps.parse(gps.lastNMEA());
   }
+
+  // AMG88xx
+  amg.readPixels(pixels);
   
   // LSM9DS1 gyro
   sensors_event_t a, m, g, temp;
@@ -190,7 +198,22 @@ void processData() {
   printer.print(m.magnetic.z);                    printer.print(F(","));
   printer.print(g.gyro.x);                        printer.print(F(","));
   printer.print(g.gyro.y);                        printer.print(F(","));
-  printer.print(g.gyro.z);
+  printer.print(g.gyro.z);                        printer.print(F(","));
+
+  // AMG pixel array
+  printer.print(F("["));
+  for (uint8_t i = 0; i < 63; i++) {
+    printer.print(pixels[i]);
+    printer.print(F(","));
+  }
+  printer.print(pixels[63]);
+  printer.println(F("]"));
+}
+
+void startAMG() {
+  if (!amg.begin()) {
+    error(11);
+  }
 }
 
 /// starts the BME680 sensor
@@ -286,6 +309,7 @@ void startTemp() {
 }
 
 void startComponents() {
+  startAMG();
   startBME();
   startCCS();
   startGPS();
