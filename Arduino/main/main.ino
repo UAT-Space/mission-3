@@ -20,6 +20,7 @@
 #define radioRX        19       // RX1
 #define tempPin        40       // Digital temp sensor
 #define chipSelect     53       // SD CS
+#define uvPin          A0       // UV sensor analog in
 #define FILE_BASE_NAME "Data"
 #define PRESSURE_HPA (1018.0)   // needs to be updated for launch day (sea level hpa)
 
@@ -31,6 +32,9 @@ uint32_t logTime;
 
 // AMG88xx pixel buffer
 float pixels[64];
+
+// UV sensor value;
+int uvValue;
 
 // GPS
 Adafruit_GPS gps(&gpsSerial);
@@ -77,6 +81,7 @@ Tee printer(printMode, file);
 
 void error(uint8_t c);
 void processData();
+void startAMG();
 void startBME();
 void startCCS();
 void startGPS();
@@ -96,8 +101,9 @@ void setup() {
     SysCall::yield();
   }
 
-  // start BME/CCS/GPS/GYRO/SD
+  // start all sensors
   startComponents();
+  pinMode(uvPin, INPUT);
 
   // start on a multiple of the sample interval.
   logTime = micros() / (1000UL * SAMPLE_INTERVAL_MS) + 1;
@@ -151,6 +157,9 @@ void processData() {
     gps.parse(gps.lastNMEA());
   }
 
+  // UV sensor
+  uvValue = analogRead(uvPin);
+
   // AMG88xx
   amg.readPixels(pixels);
   
@@ -190,6 +199,7 @@ void processData() {
   printer.print(ccsTemp);                         printer.print(F(","));
   printer.print(ccs.geteCO2());                   printer.print(F(","));
   printer.print(ccs.getTVOC());                   printer.print(F(","));
+  printer.print(uvValue);                         printer.print(F(","));
   printer.print(a.acceleration.x);                printer.print(F(","));
   printer.print(a.acceleration.y);                printer.print(F(","));
   printer.print(a.acceleration.z);                printer.print(F(","));
