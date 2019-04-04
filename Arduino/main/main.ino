@@ -77,6 +77,7 @@ Tee printer(printMode, file);
 
 void error(uint8_t c);
 void processData();
+void startAMG();
 void startBME();
 void startCCS();
 void startGPS();
