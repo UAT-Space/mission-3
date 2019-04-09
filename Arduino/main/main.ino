@@ -22,7 +22,7 @@
 #define radioRX        19       // RX1
 #define tempPin        40       // Digital temp sensor
 #define chipSelect     53       // SD CS
-#define uvPin          A0       // UV sensor analog in
+#define uvPin          A3       // UV sensor analog in
 #define FILE_BASE_NAME "Data"
 #define PRESSURE_HPA (1018.0)   // needs to be updated for launch day (sea level hpa)
 
