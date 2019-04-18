@@ -3,7 +3,7 @@
 // Copyrights licensed under the Apache-2.0 License.
 // Author : Brandon Nay | branay@uat.edu | linkedin.com/in/brandon-nay/
 
-#include <SdFat.h>              // SD
+#include <SD.h>                 // SD
 #include <Adafruit_GPS.h>       // GPS
 #include <Adafruit_Sensor.h>    // Driver library required by Adafruit sensors
 #include <Adafruit_CCS811.h>    // I2C Air quality sensor breakout (eC02, TVOC)
@@ -50,8 +50,7 @@ OneWire oneWire(tempPin);
 DallasTemperature digitalTemp(&oneWire);
 
 // SD
-SdFat sd;
-SdFile file;
+File file;
 
 
 /* Class feeds one input to two output channels (ex. radio and SD).
@@ -97,9 +96,7 @@ void startComponents();
 void setup() {
   // start either Serial or Serial1
   printMode.begin(9600);
-  while (!printMode) {
-    SysCall::yield();
-  }
+  while (!printMode);
 
   // start all sensors
   startComponents();
@@ -132,10 +129,7 @@ void loop() {
   // LOG
   processData();
 
-  // force data to SD and update the directory entry to avoid data loss.
-  if (!file.sync() || file.getWriteError()) {
-    error(2);
-  }
+  file.flush();
 }
 
 //////////////////////////
@@ -245,9 +239,7 @@ void startCCS(){
   if (!ccs.begin()) {
     error(5);
   }
-  while(!ccs.available()) {
-    SysCall::yield();
-  }
+  while(!ccs.available());
   
   //calibrate temperature sensor
   float temp = ccs.calculateTemperature();
@@ -256,6 +248,8 @@ void startCCS(){
 
 void startGPS() {
   gps.begin(9600);
+  while (!gpsSerial);
+  
   gps.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
   gps.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
 }
@@ -264,6 +258,7 @@ void startGPS() {
 void startLSM() {
   if (!lsm.begin()) {
     error(6);
+    return;
   }
   
   // 1.) Set the accelerometer range
@@ -286,9 +281,17 @@ void startLSM() {
 
 /// starts the SD card and creates a new file to avoid overwriting
 void startSD() {
-  // try speed lower than 50 if SPI errors occur
-  if (!sd.begin(chipSelect, SD_SCK_MHZ(50))) {
-    error(7);
+  pinMode(chipSelect, OUTPUT);
+  
+  // attempt to start SD card up to 3 times
+  for (int i = 1; i <= 3; i++)
+  {
+    if (SD.begin(chipSelect)) break;
+    if (i == 3)
+    {
+      error(7);
+      return;
+    }
   }
 
   // find unused file name
@@ -297,7 +300,7 @@ void startSD() {
   if (BASE_NAME_SIZE > 6) {
     error(8);
   }
-  while (sd.exists(fileName)) {
+  while (SD.exists(fileName)) {
     if (fileName[BASE_NAME_SIZE + 1] != '9') {
       fileName[BASE_NAME_SIZE + 1]++;
     }
@@ -309,9 +312,7 @@ void startSD() {
       error(9);
     }
   }
-  if (!file.open(fileName, O_WRONLY | O_CREAT | O_EXCL)) {
-    error(10);
-  }
+  file = SD.open(fileName, FILE_WRITE);
 }
 
 void startTemp() {
