@@ -3,6 +3,8 @@
 // Copyrights licensed under the Apache-2.0 License.
 // Author : Brandon Nay | branay@uat.edu | linkedin.com/in/brandon-nay/
 
+// Compiles on AVR Boards driver v 1.6.21. | lto-wrapper issue on 1.6.22 and up
+
 #include <Adafruit_GPS.h>       // GPS
 #include <Adafruit_Sensor.h>    // Driver library required by Adafruit sensors
 #include <Adafruit_CCS811.h>    // I2C Air quality sensor breakout (eC02, TVOC)
