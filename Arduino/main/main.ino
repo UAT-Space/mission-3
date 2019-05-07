@@ -5,6 +5,7 @@
 
 // Compiles on AVR Boards driver v 1.6.21. | lto-wrapper issue on 1.6.22 and up
 
+#include <SD.h>                 // SD
 #include <Adafruit_GPS.h>       // GPS
 #include <Adafruit_Sensor.h>    // Driver library required by Adafruit sensors
 #include <Adafruit_CCS811.h>    // I2C Air quality sensor breakout (eC02, TVOC)
@@ -13,14 +14,15 @@
 #include <Adafruit_BMP085_U.h>  // I2C Pressure sensor breakout (pressure, temp, humidity, VOC)
 #include <DallasTemperature.h>  // Digital Temperature Sensor
 
-#define printer   Serial1       // Serial for USB | Serial1 for radio
-#define gpsSerial Serial3       // GPS Serial line
-#define gpsTX          14       // TX3
-#define gpsRX          15       // RX3
-#define radioTX        18       // TX1
-#define radioRX        19       // RX1
-#define tempPin        40       // Digital temp sensor
-#define uvPin          A0       // UV sensor analog in
+#define printer Serial1   // Serial for USB | Serial1 for radio
+#define gpsSerial Serial3 // GPS Serial line
+#define SDCS 8            // SD card Chip selct pin
+#define gpsTX 14          // TX3
+#define gpsRX 15          // RX3
+#define radioTX 18        // TX1
+#define radioRX 19        // RX1
+#define tempPin 40        // Digital temp sensor
+#define uvPin A0          // UV sensor analog in
 #define FILE_BASE_NAME "Data"
 #define PRESSURE_HPA (1019.3)   // needs to be updated for launch day (sea level hpa)
 
@@ -48,6 +50,9 @@ Adafruit_AMG88xx amg;
 // Digital Temp
 OneWire oneWire(tempPin);
 DallasTemperature digitalTemp(&oneWire);
+
+// SD
+File file;
 
 
 /////////////////////////
@@ -153,31 +158,57 @@ void processData() {
   // report sensor readings (printer -> radio and SD)
 
   // logTime/1M -> seconds elapsed
-  printer.print((logTime / 1000000));               printer.print(F(","));
+  printer.print((logTime / 1000000));             printer.print(F(","));
+  file.print((logTime / 1000000));             printer.print(F(","));
   printer.print(gps.hour);                        printer.print(F(":"));
+  file.print(gps.hour);                        printer.print(F(":"));
   printer.print(gps.minute);                      printer.print(F(":"));
+  file.print(gps.minute);                      printer.print(F(":"));
   printer.print(gps.seconds);                     printer.print(F(","));
+  file.print(gps.seconds);                     printer.print(F(","));
   printer.print(gps.latitudeDegrees, 4);          printer.print(F(","));
+  file.print(gps.latitudeDegrees, 4);          printer.print(F(","));
   printer.print(gps.longitudeDegrees, 4);         printer.print(F(","));
+  file.print(gps.longitudeDegrees, 4);         printer.print(F(","));
   printer.print(gps.altitude);                    printer.print(F(","));
+  file.print(gps.altitude);                    printer.print(F(","));
   printer.print(bmpAltitude);                     printer.print(F(","));
+  file.print(bmpAltitude);                     printer.print(F(","));
   printer.print(bmpEvent.pressure);               printer.print(F(","));
+  file.print(bmpEvent.pressure);               printer.print(F(","));
   printer.print(bmpTemperature);                  printer.print(F(","));
+  file.print(bmpTemperature);                  printer.print(F(","));
   printer.print(digitalTemp.getTempCByIndex(0));  printer.print(F(","));
+  file.print(digitalTemp.getTempCByIndex(0));  printer.print(F(","));
   printer.print(ccsTemp);                         printer.print(F(","));
+  file.print(ccsTemp);                         printer.print(F(","));
   printer.print(ccs.geteCO2());                   printer.print(F(","));
+  file.print(ccs.geteCO2());                   printer.print(F(","));
   printer.print(ccs.getTVOC());                   printer.print(F(","));
+  file.print(ccs.getTVOC());                   printer.print(F(","));
   printer.print(uvValue);                         printer.print(F(","));
+  file.print(uvValue);                         printer.print(F(","));
   printer.print(a.acceleration.x);                printer.print(F(","));
+  file.print(a.acceleration.x);                printer.print(F(","));
   printer.print(a.acceleration.y);                printer.print(F(","));
+  file.print(a.acceleration.y);                printer.print(F(","));
   printer.print(a.acceleration.z);                printer.print(F(","));
+  file.print(a.acceleration.z);                printer.print(F(","));
   printer.print(m.magnetic.x);                    printer.print(F(","));
+  file.print(m.magnetic.x);                    printer.print(F(","));
   printer.print(m.magnetic.y);                    printer.print(F(","));
+  file.print(m.magnetic.y);                    printer.print(F(","));
   printer.print(m.magnetic.z);                    printer.print(F(","));
+  file.print(m.magnetic.z);                    printer.print(F(","));
   printer.print(g.gyro.x);                        printer.print(F(","));
+  file.print(g.gyro.x);                        printer.print(F(","));
   printer.print(g.gyro.y);                        printer.print(F(","));
+  file.print(g.gyro.y);                        printer.print(F(","));
   printer.print(g.gyro.z);                        printer.print(F(","));
+  file.print(g.gyro.z);                        printer.print(F(","));
 
+  file.flush();
+  
   // AMG pixel array
   printer.print(F("["));
   for (uint8_t i = 0; i < 63; i++) {
@@ -246,6 +277,35 @@ void startLSM() {
   //lsm.setupGyro(lsm.LSM9DS1_GYROSCALE_2000DPS);
 }
 
+void startSD() {
+  if (!SD.begin(SDCS)) {
+    error(6);
+  }
+
+  // find unused file name
+  const uint8_t BASE_NAME_SIZE = sizeof(FILE_BASE_NAME) - 1;
+  char fileName[13] = FILE_BASE_NAME "00.csv";
+  if (BASE_NAME_SIZE > 6) {
+    error(8);
+  }
+  while (SD.exists(fileName)) {
+    if (fileName[BASE_NAME_SIZE + 1] != '9') {
+      fileName[BASE_NAME_SIZE + 1]++;
+    }
+    else if (fileName[BASE_NAME_SIZE] != '9') {
+      fileName[BASE_NAME_SIZE + 1] = '0';
+      fileName[BASE_NAME_SIZE]++;
+    }
+    else {
+      error(9);
+    }
+  }
+  file = SD.open(fileName, "W+");
+  if (!file) {
+    error(24);
+  }
+}
+
 void startTemp() {
   digitalTemp.begin();
 }
@@ -256,5 +316,6 @@ void startComponents() {
   startCCS();
   startGPS();
   startLSM();
+  startSD();
   startTemp();
 }
